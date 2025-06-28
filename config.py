@@ -27,7 +27,7 @@ class Config:
         self.enable_reddit_ai = os.getenv("ENABLE_REDDIT_AI", "true").lower() == "true"
         self.reddit_client_id = os.getenv("REDDIT_CLIENT_ID") # For Reddit API
         self.reddit_client_secret = os.getenv("REDDIT_CLIENT_SECRET")
-        self.reddit_user_agent = os.getenv("REDDIT_USER_AGENT", "LinkedInAIAgent/0.1 by YourUsername")
+        self.reddit_user_agent = os.getenv("REDDIT_USER_AGENT", f"LinkedInAIAgent/0.1 by YourUsername (UniqueId:{os.urandom(4).hex()})")
         self.reddit_ai_max_articles = int(os.getenv("REDDIT_AI_MAX_ARTICLES", "5"))
 
         self.enable_techcrunch_ai = os.getenv("ENABLE_TECHCRUNCH_AI", "true").lower() == "true"

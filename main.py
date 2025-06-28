@@ -1,5 +1,8 @@
 import time
 import logging
+import asyncio
+import nest_asyncio
+
 from config import load_config
 from src.article_fetcher import ArticleFetcher
 from src.llm_handler import LLMHandler
@@ -7,9 +10,11 @@ from src.telegram_bot import TelegramNotifier
 from src.linkedin_poster import LinkedInPoster
 from src.utils import setup_logging # Assuming Article dataclass is available via one of these or utils
 
+nest_asyncio.apply()
+
 logger = logging.getLogger(__name__)
 
-def main():
+async def main():
     """
     Main function to run the LinkedIn AI Agent.
     Orchestrates the fetching, processing, and posting of AI articles.
@@ -46,9 +51,10 @@ def main():
     try:
         logger.info("Starting Telegram bot polling in background...")
         notifier.start_polling(block=False) # Start polling in a non-blocking way
+        time.sleep(5) # Give the Telegram bot a moment to initialize its polling thread
 
         logger.info("Fetching trending AI articles...")
-        articles = fetcher.fetch_all_articles()
+        articles = await fetcher.fetch_all_articles()
 
         if not articles:
             logger.info("No new articles found in this run.")
@@ -109,11 +115,13 @@ def main():
         if 'linkedin_poster' in locals() and linkedin_poster is not None:
             linkedin_poster.close() # Close Selenium WebDriver
         if 'notifier' in locals() and notifier is not None:
-            notifier.stop_polling() # Stop Telegram bot polling
+            # The polling thread is a daemon, so it will exit when the main program exits.
+            # No explicit stop needed here to avoid RuntimeError with different event loops.
+            pass
         logger.info("Autonomous LinkedIn AI Agent run finished. Exiting.")
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
 
     # Example for scheduling (runs main() every hour):
     # Note: If using scheduling, ensure main() is robust enough to be called multiple times.

@@ -1,10 +1,14 @@
 import requests
+import praw
+import asyncpraw
 from bs4 import BeautifulSoup
 import logging
 import time
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 from config import Config # Assuming config.py is in the parent directory or PYTHONPATH
+import asyncio
+import nest_asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +43,7 @@ class ArticleFetcher:
                     return None
         return None # Should be unreachable if loop completes
 
-    def fetch_hackernews_articles(self) -> List[Article]:
+    async def fetch_hackernews_articles(self) -> List[Article]:
         if not self.config.enable_hackernews:
             return []
 
@@ -61,81 +65,65 @@ class ArticleFetcher:
             for hit in data.get("hits", []):
                 title = hit.get("title")
                 url = hit.get("url")
-                if title and url and "http" in url: # Basic validation
-                    # Further filter for relevance if needed, e.g., by points or num_comments
-                    # if hit.get("points", 0) > 50 and hit.get("num_comments", 0) > 10:
-                    articles.append(Article(title=title, url=url, source="Hacker News"))
-                    if len(articles) >= self.config.hackernews_max_articles:
-                        break
+                # Hacker News often has 'story_text' or 'comment_text' which are not external articles
+                # Also, filter out job postings or Ask HN/Show HN if not desired
+                if title and url and "http" in url and not hit.get("story_text") and not hit.get("comment_text"):
+                    # Basic keyword filtering for relevance
+                    title_lower = title.lower()
+                    if any(keyword in title_lower for keyword in ["ai", "artificial intelligence", "machine learning", "llm", "deep learning", "neural network"]):
+                        articles.append(Article(title=title, url=url, source="Hacker News"))
+                        if len(articles) >= self.config.hackernews_max_articles:
+                            break
             logger.info(f"Fetched {len(articles)} articles from Hacker News.")
         except Exception as e:
             logger.error(f"Error parsing Hacker News response: {e}")
         return articles[:self.config.hackernews_max_articles]
 
-    def fetch_reddit_ai_articles(self) -> List[Article]:
+    def fetch_reddit_articles_sync(self) -> List[Article]:
+        nest_asyncio.apply()
+        return asyncio.run(self.fetch_reddit_ai_articles())
+
+    async def fetch_reddit_ai_articles(self) -> List[Article]:
+        nest_asyncio.apply()
+        return asyncio.run(self.fetch_reddit_ai_articles())
+
+    async def fetch_reddit_ai_articles(self) -> List[Article]:
         if not self.config.enable_reddit_ai:
             return []
         if not self.config.reddit_client_id or not self.config.reddit_client_secret:
             logger.warning("Reddit API credentials not configured. Skipping Reddit.")
-            # Fallback to scraping if no API creds, or just skip
-            return self._scrape_reddit_ai_articles() # Example of a fallback
+            return []
 
-        logger.info("Fetching articles from Reddit r/artificialintelligence using API...")
-
-        # 1. Get Access Token
-        auth = requests.auth.HTTPBasicAuth(self.config.reddit_client_id, self.config.reddit_client_secret)
-        data = {
-            'grant_type': 'client_credentials',
-            'duration': 'temporary' # Get a temporary token
-        }
-        headers = {'User-Agent': self.config.reddit_user_agent}
+        logger.info("Fetching articles from Reddit r/artificialintelligence using Async PRAW...")
 
         try:
-            token_res = self.session.post('https://www.reddit.com/api/v1/access_token',
-                                     auth=auth, data=data, headers=headers, timeout=self.config.request_timeout)
-            token_res.raise_for_status()
-            token = token_res.json().get('access_token')
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Failed to get Reddit API access token: {e}")
-            return self._scrape_reddit_ai_articles() # Fallback to scraping on token failure
-        except Exception as e: # Catch any other error like JSONDecodeError
-            logger.error(f"Error processing Reddit API token response: {e}")
-            return self._scrape_reddit_ai_articles()
+            reddit = asyncpraw.Reddit(
+                client_id=self.config.reddit_client_id,
+                client_secret=self.config.reddit_client_secret,
+                user_agent=self.config.reddit_user_agent,
+            )
 
-        if not token:
-            logger.error("Reddit API token not obtained.")
-            return self._scrape_reddit_ai_articles()
+            subreddit = await reddit.subreddit("MachineLearning")
+            articles: List[Article] = []
 
-        # 2. Fetch posts from r/artificialintelligence
-        api_url = f"https://oauth.reddit.com/r/artificialintelligence/hot" # or /top, /new
-        headers.update({'Authorization': f'bearer {token}'})
-        params = {'limit': self.config.reddit_ai_max_articles + 10, 't': 'day'} # Fetch more, filter later
-
-        response = self._make_request(api_url, params=params)
-        if not response:
-            return self._scrape_reddit_ai_articles() # Fallback
-
-        articles: List[Article] = []
-        try:
-            data = response.json()
-            for post_data in data.get("data", {}).get("children", []):
-                post = post_data.get("data", {})
-                title = post.get("title")
-                url = post.get("url_overridden_by_dest") # This usually has the direct article link
-
-                # Filter out self-posts or posts not linking to external articles
-                if title and url and "http" in url and not post.get("is_self", False) and "reddit.com" not in url:
-                    # Could add more filters: score > X, num_comments > Y, domain not in blocklist
-                    if not any(substring in title.lower() for substring in ["ama", "ask me anything", "discussion", "weekly thread"]):
-                         articles.append(Article(title=title, url=url, source="Reddit r/artificialintelligence"))
-                    if len(articles) >= self.config.reddit_ai_max_articles:
-                        break
+            async for submission in subreddit.new(limit=self.config.reddit_ai_max_articles + 50): # Fetch more to filter
+                # Filter out self-posts, stickied posts, and non-external links
+                if not submission.is_self and not submission.stickied and "reddit.com" not in submission.url:
+                    # Further filter by keywords in title or selftext (if it's a text post)
+                    title_lower = submission.title.lower()
+                    if any(keyword in title_lower for keyword in ["ai", "artificial intelligence", "machine learning", "llm", "deep learning", "neural network"]):
+                        # Filter out common irrelevant post types
+                        if not any(substring in title_lower for substring in ["ama", "ask me anything", "discussion", "weekly thread", "showoff", "meme"]):
+                            articles.append(Article(title=submission.title, url=submission.url, source="Reddit r/artificialintelligence"))
+                            if len(articles) >= self.config.reddit_ai_max_articles:
+                                break
             logger.info(f"Fetched {len(articles)} articles from Reddit API.")
+            await reddit.close()
+            return articles[:self.config.reddit_ai_max_articles]
+
         except Exception as e:
-            logger.error(f"Error parsing Reddit API response: {e}")
-            # Potentially fallback to scraping here too if API parsing fails mid-way
-            # return self._scrape_reddit_ai_articles()
-        return articles[:self.config.reddit_ai_max_articles]
+            logger.error(f"Error fetching from Reddit using Async PRAW: {e}")
+            return []
 
     def _scrape_reddit_ai_articles(self) -> List[Article]:
         logger.info("Attempting to scrape articles from Reddit r/artificialintelligence (fallback)...")
@@ -184,7 +172,7 @@ class ArticleFetcher:
         return articles[:self.config.reddit_ai_max_articles]
 
 
-    def fetch_techcrunch_ai_articles(self) -> List[Article]:
+    async def fetch_techcrunch_ai_articles(self) -> List[Article]:
         if not self.config.enable_techcrunch_ai:
             return []
 
@@ -205,7 +193,8 @@ class ArticleFetcher:
             # Primary strategy: Look for common article container classes and then find title links within them.
             # Selectors are ordered by assumed likelihood or specificity.
             potential_article_selectors = [
-                "article.post-block h2.post-block__title a", # More specific if structure matches
+                "a.post-card__title-link", # Common for newer TechCrunch layouts
+                "h2.post-block__title a", # Older TechCrunch layout
                 "div.river-block h2 a", # Another common pattern on news sites
                 "li.river-item h2 a", # If articles are in a list
                 "article header h2 a", # General article structure
@@ -225,7 +214,7 @@ class ArticleFetcher:
 
                     if not url: continue
                     if not url.startswith("http"): # Ensure absolute URL
-                        if url.startswith("/"):
+                        if url.startswith("/"): 
                             url = f"https://techcrunch.com{url}"
                         else:
                             logger.warning(f"Skipping potentially malformed TechCrunch URL: {url}")
@@ -261,7 +250,7 @@ class ArticleFetcher:
             logger.error(f"Error scraping TechCrunch AI: {e}")
         return articles[:self.config.techcrunch_max_articles]
 
-    def fetch_arxiv_articles(self) -> List[Article]:
+    async def fetch_arxiv_articles(self) -> List[Article]:
         if not self.config.enable_arxiv:
             return []
 
@@ -310,7 +299,7 @@ class ArticleFetcher:
         return articles[:self.config.arxiv_max_articles]
 
 
-    def fetch_all_articles(self) -> List[Article]:
+    async def fetch_all_articles(self) -> List[Article]:
         all_articles: List[Article] = []
 
         # Deduplication based on URL
@@ -325,13 +314,13 @@ class ArticleFetcher:
                     logger.debug(f"Duplicate article skipped: {article.title} ({article.url})")
 
         if self.config.enable_hackernews:
-            add_articles_if_new(self.fetch_hackernews_articles())
+            add_articles_if_new(await self.fetch_hackernews_articles())
         if self.config.enable_reddit_ai:
-            add_articles_if_new(self.fetch_reddit_ai_articles())
+            add_articles_if_new(self.fetch_reddit_articles_sync())
         if self.config.enable_techcrunch_ai:
-            add_articles_if_new(self.fetch_techcrunch_ai_articles())
+            add_articles_if_new(await self.fetch_techcrunch_ai_articles())
         if self.config.enable_arxiv:
-            add_articles_if_new(self.fetch_arxiv_articles())
+            add_articles_if_new(await self.fetch_arxiv_articles())
 
         logger.info(f"Total unique articles fetched: {len(all_articles)}")
         return all_articles
@@ -346,6 +335,12 @@ class ArticleFetcher:
         logger.info(f"Fetching content for article: {url}")
         response = self._make_request(url)
         if not response:
+            return None
+
+        # Check content type. If not HTML, return None.
+        content_type = response.headers.get('Content-Type', '')
+        if 'text/html' not in content_type:
+            logger.warning(f"Skipping non-HTML content for {url}. Content-Type: {content_type}")
             return None
 
         try:
@@ -539,248 +534,4 @@ Note on Web Scraping (TechCrunch, Reddit scrape fallback, article content):
   are more advanced for this task but add extra dependencies. The current implementation is a heuristic-based approach.
 - Always respect `robots.txt` (though this script currently doesn't automatically check it).
 - Be mindful of request frequency to avoid overloading servers or getting IP banned.
-"""
-                            break
-
-            if not articles: # A fallback if the above doesn't work well
-                logger.warning("Primary TechCrunch scraping method found no articles, trying fallback selector.")
-                # Fallback: Look for links within list items if it's a simpler list page
-                list_items = soup.select("ul.article-list li.article-item h3 a") # Example, might need adjustment
-                for link_tag in list_items:
-                    title = link_tag.text.strip()
-                    url = link_tag['href']
-                    if not url.startswith("http"): # Ensure absolute URL
-                        url = f"https://techcrunch.com{url}" if url.startswith("/") else None
-
-                    if title and url and url not in found_urls:
-                        articles.append(Article(title=title, url=url, source="TechCrunch AI"))
-                        found_urls.add(url)
-                        if len(articles) >= self.config.techcrunch_max_articles:
-                            break
-
-            logger.info(f"Fetched {len(articles)} articles from TechCrunch AI.")
-        except Exception as e:
-            logger.error(f"Error scraping TechCrunch AI: {e}")
-        return articles[:self.config.techcrunch_max_articles]
-
-    def fetch_arxiv_articles(self) -> List[Article]:
-        if not self.config.enable_arxiv:
-            return []
-
-        logger.info("Fetching articles from ArXiv...")
-        # ArXiv API base URL for search queries
-        arxiv_api_url = "http://export.arxiv.org/api/query"
-        params = {
-            "search_query": self.config.arxiv_search_query,
-            "sortBy": "submittedDate", # Get the latest articles
-            "sortOrder": "descending",
-            "max_results": self.config.arxiv_max_articles + 5 # Fetch a bit more to allow filtering
-        }
-
-        response = self._make_request(arxiv_api_url, params=params)
-        if not response:
-            return []
-
-        articles: List[Article] = []
-        try:
-            # ArXiv API returns XML
-            soup = BeautifulSoup(response.content, "xml") # Use 'xml' parser
-            entries = soup.find_all("entry")
-
-            for entry in entries:
-                title_tag = entry.find("title")
-                # ArXiv links can be to PDF or abstract, prefer abstract page (HTML link)
-                link_tag = entry.find("link", rel="alternate", type="text/html")
-                if not link_tag: # Fallback to PDF if no HTML link found
-                    link_tag = entry.find("link", title="pdf")
-
-                if title_tag and link_tag and link_tag.get('href'):
-                    title = title_tag.text.strip().replace('\n', ' ').replace('  ', ' ')
-                    url = link_tag['href']
-                    articles.append(Article(title=title, url=url, source="ArXiv"))
-                    if len(articles) >= self.config.arxiv_max_articles:
-                        break
-            logger.info(f"Fetched {len(articles)} articles from ArXiv.")
-        except Exception as e:
-            logger.error(f"Error parsing ArXiv API response: {e}")
-        return articles[:self.config.arxiv_max_articles]
-
-
-    def fetch_all_articles(self) -> List[Article]:
-        all_articles: List[Article] = []
-
-        # Deduplication based on URL
-        seen_urls = set()
-
-        def add_articles_if_new(new_articles: List[Article]):
-            for article in new_articles:
-                if article.url not in seen_urls:
-                    all_articles.append(article)
-                    seen_urls.add(article.url)
-                else:
-                    logger.debug(f"Duplicate article skipped: {article.title} ({article.url})")
-
-        if self.config.enable_hackernews:
-            add_articles_if_new(self.fetch_hackernews_articles())
-        if self.config.enable_reddit_ai:
-            add_articles_if_new(self.fetch_reddit_ai_articles())
-        if self.config.enable_techcrunch_ai:
-            add_articles_if_new(self.fetch_techcrunch_ai_articles())
-        if self.config.enable_arxiv:
-            add_articles_if_new(self.fetch_arxiv_articles())
-
-        logger.info(f"Total unique articles fetched: {len(all_articles)}")
-        return all_articles
-
-    def get_article_content(self, url: str) -> Optional[str]:
-        """
-        Fetches the main textual content of an article from its URL.
-        This is a basic implementation and might need a more sophisticated
-        library like 'newspaper3k' for better results across various sites.
-        """
-        logger.info(f"Fetching content for article: {url}")
-        response = self._make_request(url)
-        if not response:
-            return None
-
-        try:
-            soup = BeautifulSoup(response.content, "html.parser")
-
-            # Remove script and style elements
-            for script_or_style in soup(["script", "style"]):
-                script_or_style.decompose()
-
-            # Try to find common article body tags/classes
-            # This is highly heuristic and will not work for all sites
-            possible_body_selectors = [
-                "article",
-                "div[class*='article-content']",
-                "div[class*='post-content']",
-                "div[class*='entry-content']",
-                "div[class*='main-content']",
-                "div[role='main']"
-            ]
-
-            text_parts = []
-            content_found = False
-
-            for selector in possible_body_selectors:
-                body = soup.select_one(selector)
-                if body:
-                    paragraphs = body.find_all(['p', 'div']) # Include divs as some sites use them for text blocks
-                    for p in paragraphs:
-                        text = p.get_text(separator=" ", strip=True)
-                        if text and len(text.split()) > 10: # Filter out very short or empty paragraphs
-                             text_parts.append(text)
-                    if text_parts:
-                        content_found = True
-                        break # Found content with one selector, assume it's the main one
-
-            if not content_found: # Fallback: get all text from body, then try to clean
-                logger.warning(f"Could not find specific article body for {url}. Using fallback text extraction.")
-                body = soup.find("body")
-                if body:
-                    text_parts = [p.get_text(separator=" ", strip=True) for p in body.find_all("p") if p.get_text(strip=True)]
-
-            if not text_parts:
-                logger.warning(f"No significant text content found for {url} after trying all methods.")
-                return None
-
-            full_text = "\n".join(text_parts)
-            # Basic cleaning: reduce multiple newlines/spaces
-            full_text = "\n".join([line for line in full_text.splitlines() if line.strip()])
-            full_text = full_text.replace('  ', ' ')
-
-            # Limit content length to avoid oversized LLM prompts (e.g. first 1500 words)
-            max_words = 1500
-            words = full_text.split()
-            if len(words) > max_words:
-                full_text = " ".join(words[:max_words]) + "..."
-                logger.info(f"Truncated article content for {url} to {max_words} words.")
-
-            return full_text
-        except Exception as e:
-            logger.error(f"Error extracting content from {url}: {e}")
-            return None
-
-
-if __name__ == "__main__":
-    # This is for testing the ArticleFetcher locally
-    # You'll need a .env file with necessary configurations
-
-    # Setup basic logging for testing
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
-    # Create a dummy config for testing. In a real scenario, load_config() from config.py would be used.
-    class TestConfig(Config):
-        def __init__(self):
-            super().__init__() # Load from .env
-            # Override specific settings for testing if needed, or ensure .env is set up
-            self.enable_hackernews = True
-            self.hackernews_max_articles = 2
-            self.enable_reddit_ai = True # Requires REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET in .env
-            self.reddit_ai_max_articles = 2
-            self.enable_techcrunch_ai = True
-            self.techcrunch_max_articles = 2
-            self.enable_arxiv = True # ArXiv is generally public
-            self.arxiv_max_articles = 2
-            self.request_timeout = 15
-            self.max_retries = 2
-            self.retry_delay = 3
-            if not self.validate():
-                 raise Exception("TestConfig is not valid. Check .env or overrides.")
-
-
-    try:
-        test_config = TestConfig()
-        fetcher = ArticleFetcher(test_config)
-
-        print("\n--- Testing Hacker News ---")
-        hn_articles = fetcher.fetch_hackernews_articles()
-        for article in hn_articles:
-            print(f"  Title: {article.title}, URL: {article.url}, Source: {article.source}")
-
-        print("\n--- Testing Reddit r/artificialintelligence ---")
-        # Ensure your .env has REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET for API access
-        # If not, it will attempt to scrape (which is less reliable)
-        reddit_articles = fetcher.fetch_reddit_ai_articles()
-        for article in reddit_articles:
-            print(f"  Title: {article.title}, URL: {article.url}, Source: {article.source}")
-
-        print("\n--- Testing TechCrunch AI ---")
-        tc_articles = fetcher.fetch_techcrunch_ai_articles()
-        for article in tc_articles:
-            print(f"  Title: {article.title}, URL: {article.url}, Source: {article.source}")
-
-        print("\n--- Testing ArXiv ---")
-        arxiv_articles = fetcher.fetch_arxiv_articles()
-        for article in arxiv_articles:
-            print(f"  Title: {article.title}, URL: {article.url}, Source: {article.source}")
-
-        print("\n--- Testing Fetch All (Combined & Deduplicated) ---")
-        all_articles = fetcher.fetch_all_articles()
-        for i, article in enumerate(all_articles):
-            print(f"  {i+1}. Title: {article.title}\n     URL: {article.url}\n     Source: {article.source}")
-            if i < 2 : # Test content fetching for first 2 articles
-                print(f"     Fetching content for: {article.url}")
-                content = fetcher.get_article_content(article.url)
-                if content:
-                    print(f"     Content snippet: {content[:200]}...")
-                else:
-                    print("     Could not fetch content.")
-            print("-" * 20)
-
-    except Exception as e:
-        logger.error(f"Error during ArticleFetcher test: {e}", exc_info=True)
-
-"""
-Note on Reddit API vs Scraping:
-- Using the Reddit API (with client ID and secret) is more reliable and respectful of Reddit's platform.
-- Scraping (the fallback `_scrape_reddit_ai_articles`) can break if Reddit changes its HTML structure.
-- To use the API:
-    1. Go to https://www.reddit.com/prefs/apps
-    2. Create a new app (select "script" type).
-    3. Set a redirect URI (e.g., http://localhost:8080 - it won't actually be used for this script type).
-    4. Note the client ID (under your app name) and client secret.
-    5. Add these to your .env file as REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET.
 """

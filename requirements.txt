@@ -13,3 +13,7 @@ schedule
 pandas # For Google Sheets or other structured data logging
 # Webdriver manager for Selenium
 webdriver-manager
+# Reddit API
+praw
+asyncpraw
+nest-asyncio

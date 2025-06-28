@@ -1,5 +1,7 @@
 import logging
 import time
+import sys
+import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -30,7 +32,7 @@ class LinkedInPoster:
             options = webdriver.ChromeOptions()
             # Headless mode is essential for server environments.
             # For local debugging, you might want to comment out "--headless" to see the browser.
-            options.add_argument("--headless")
+            # options.add_argument("--headless") # Temporarily disabled for debugging
             options.add_argument("--disable-gpu") # Often recommended for headless
             options.add_argument("--no-sandbox") # Required for running as root (e.g., in Docker)
             options.add_argument("--disable-dev-shm-usage") # Overcome limited resource problems in Docker
@@ -39,6 +41,11 @@ class LinkedInPoster:
             options.add_argument("--disable-blink-features=AutomationControlled") # Helps avoid bot detection
             options.add_experimental_option("excludeSwitches", ["enable-automation"]) # Removes "Chrome is being controlled..."
             options.add_experimental_option('useAutomationExtension', False) # Disables automation extension
+
+            # Disable password save prompt
+            prefs = {"credentials_enable_service": False, "profile.password_manager_enabled": False}
+            options.add_experimental_option("prefs", prefs)
+            logger.info("ChromeOptions configured to disable password manager.")
 
             # Suppress WebDriverManager logs unless they are errors
             logging.getLogger('WDM').setLevel(logging.WARNING)
@@ -142,17 +149,13 @@ class LinkedInPoster:
         try:
             logger.info(f"Attempting to post article to LinkedIn: {article.title}")
 
-            # Navigate to the feed page (sometimes necessary if login lands elsewhere or session is old)
-            self.driver.get("https://www.linkedin.com/feed/")
-            time.sleep(3) # Allow feed to load
-
             # Click on the "Start a post" button
             # This selector is prone to change. More robust selectors are needed.
             # Common selectors:
             # By.XPATH, "//button[contains(@class, 'share-box-feed-entry__trigger')]"
             # By.XPATH, "//span[text()='Start a post']" (if inside a button)
             # By.CLASS_NAME, "share-creation-state__button" (might be too generic)
-            start_post_button_xpath = "//button[contains(@class, 'share-box-feed-entry__trigger')] | //button[.//span[text()='Start a post']]"
+            start_post_button_xpath = "//button[contains(., 'Start a post')] | //div[contains(@aria-label, 'Start a post')]"
             try:
                 start_post_button = WebDriverWait(self.driver, 20).until(
                     EC.element_to_be_clickable((By.XPATH, start_post_button_xpath))
@@ -161,6 +164,7 @@ class LinkedInPoster:
                 logger.info("Clicked 'Start a post' button.")
             except Exception as e_button:
                 logger.error(f"Could not find or click 'Start a post' button: {e_button}")
+                self.driver.save_screenshot("linkedin_start_post_fail.png") # Add screenshot on failure
                 # Try an alternative by directly focusing the editor if visible
                 try:
                     editor_placeholder = self.driver.find_element(By.XPATH, "//div[@aria-placeholder='What do you want to talk about?']")
@@ -289,8 +293,10 @@ class LinkedInPoster:
 
 
 if __name__ == "__main__":
-    # This is for testing the LinkedInPoster locally
-    # You'll need a .env file with LINKEDIN_EMAIL and LINKEDIN_PASSWORD
+    # Add the parent directory to the Python path to allow importing config.py
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    parent_dir = os.path.dirname(script_dir)
+    sys.path.insert(0, parent_dir)
 
     logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 

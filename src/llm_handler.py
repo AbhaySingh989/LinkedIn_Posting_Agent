@@ -8,7 +8,7 @@ from src.article_fetcher import ArticleFetcher # For fetching article content
 logger = logging.getLogger(__name__)
 
 class LLMHandler:
-    def __init__(self, api_key: str, model_name: str = "gemini-pro"):
+    def __init__(self, api_key: str, model_name: str = "gemini-1.5-flash"):
         if not api_key:
             raise ValueError("Gemini API Key is required.")
 
@@ -204,7 +204,7 @@ if __name__ == "__main__":
         print("\nLLM Handler tests finished.")
 """
 Note on Gemini API:
-- Ensure your `GEMINI_API_KEY` environment variable is correctly set and has access to the specified model (e.g., "gemini-pro").
+- Ensure your `GEMINI_API_KEY` environment variable is correctly set and has access to the specified model (e.g., "gemini-1.5-flash").
 - The `google-generativeai` library handles the API calls.
 - Content summarization quality depends on the model, the prompt, and the quality/clarity of the source article text.
 - The `summarization_prompt` in `config.py` can be tuned for better results.

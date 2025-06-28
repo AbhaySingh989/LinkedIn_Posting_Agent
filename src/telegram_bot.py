@@ -1,5 +1,6 @@
 import logging
 import time
+import asyncio
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler, ContextTypes
 from telegram.constants import ParseMode
@@ -188,15 +189,16 @@ class TelegramNotifier:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-        if loop.is_running() and self.application.updater and self.application.updater.running:
-             # If called from a sync function but the bot's async loop is running elsewhere.
-             # This uses asyncio.run_coroutine_threadsafe if the bot runs in a separate thread.
-             # Or, if called from within the bot's own async context already.
-            future = asyncio.run_coroutine_threadsafe(
-                self.send_article_for_approval_async(article, chat_id),
-                self.application.updater.loop # Assuming updater loop is the target
-            )
-            return future.result(timeout=self.user_interaction_timeout + 5) # Wait for result from async task
+        if loop.is_running():
+            # If called from within an async context that is already running
+            # Use create_task to schedule the coroutine on the running loop
+            asyncio.create_task(self.send_article_for_approval_async(article, chat_id))
+            # We need a way to get the result back from the async task in a sync context.
+            # This is tricky. For now, we'll make it block using run_until_complete
+            # if the loop is not already running, or rely on the background task
+            # to update USER_RESPONSES.
+            # Given nest_asyncio, asyncio.run should now work even if a loop is already running.
+            return loop.run_until_complete(self.send_article_for_approval_async(article, chat_id))
         else:
             # If the bot's main loop isn't running or we're in a context where we need to run it now.
             # This will block until the async function completes.
@@ -205,30 +207,36 @@ class TelegramNotifier:
 
     def start_polling(self, block=True):
         """Starts the Telegram bot's polling mechanism."""
-        if self.application.updater and self.application.updater.running:
+        if hasattr(self.application, 'updater') and self.application.updater and self.application.updater.running:
             logger.info("Telegram bot is already polling.")
             return
 
         logger.info("Starting Telegram bot polling...")
-        # self.application.run_polling() runs in the current thread and blocks.
-        # For it to work with the synchronous `send_article_for_approval` which runs its own loop,
-        # the polling needs to run in a separate thread.
         if block:
-            self.application.run_polling() # This will block if block is True
+            self.application.run_polling()
         else:
             import threading
-            self.polling_thread = threading.Thread(target=self.application.run_polling, daemon=True)
+            import asyncio
+
+            def polling_thread_target():
+                """Target for the polling thread to ensure an event loop is set."""
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                # run_polling is a blocking call that will create and run its own asyncio loop.
+                # By setting the loop for the thread, we ensure it has the context it needs.
+                self.application.run_polling()
+
+            self.polling_thread = threading.Thread(target=polling_thread_target, daemon=True)
             self.polling_thread.start()
             logger.info("Telegram bot polling started in a background thread.")
-            # Give it a moment to start up
             time.sleep(1)
 
 
-    def stop_polling(self):
+    async def stop_polling(self):
         """Stops the Telegram bot's polling mechanism if running."""
         if self.application.updater and self.application.updater.running:
             logger.info("Stopping Telegram bot polling...")
-            self.application.updater.stop()
+            await self.application.updater.stop()
             # If running in a separate thread, join it.
             if hasattr(self, 'polling_thread') and self.polling_thread.is_alive():
                 self.polling_thread.join(timeout=5)
