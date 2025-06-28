@@ -1,0 +1,15 @@
+# Core Libraries
+python-dotenv
+requests
+beautifulsoup4
+selenium
+# Telegram Bot
+python-telegram-bot
+# Google Gemini API
+google-generativeai
+# Optional for scheduling
+schedule
+# Optional for data handling
+pandas # For Google Sheets or other structured data logging
+# Webdriver manager for Selenium
+webdriver-manager
