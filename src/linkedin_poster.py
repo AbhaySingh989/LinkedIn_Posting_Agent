@@ -155,7 +155,7 @@ class LinkedInPoster:
             # By.XPATH, "//button[contains(@class, 'share-box-feed-entry__trigger')]"
             # By.XPATH, "//span[text()='Start a post']" (if inside a button)
             # By.CLASS_NAME, "share-creation-state__button" (might be too generic)
-            start_post_button_xpath = "//button[contains(., 'Start a post')] | //div[contains(@aria-label, 'Start a post')]"
+            start_post_button_xpath = "//button[contains(@class, 'share-box-feed-entry__trigger')] | //div[contains(@class, 'share-creation-state__button')] | //span[text()='Start a post']"
             try:
                 start_post_button = WebDriverWait(self.driver, 20).until(
                     EC.element_to_be_clickable((By.XPATH, start_post_button_xpath))

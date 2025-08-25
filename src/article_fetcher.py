@@ -79,23 +79,17 @@ class ArticleFetcher:
             logger.error(f"Error parsing Hacker News response: {e}")
         return articles[:self.config.hackernews_max_articles]
 
-    def fetch_reddit_articles_sync(self) -> List[Article]:
-        nest_asyncio.apply()
-        return asyncio.run(self.fetch_reddit_ai_articles())
+    
 
     async def fetch_reddit_ai_articles(self) -> List[Article]:
-        nest_asyncio.apply()
-        return asyncio.run(self.fetch_reddit_ai_articles())
-
-    async def fetch_reddit_ai_articles(self) -> List[Article]:
-        if not self.config.enable_reddit_ai:
-            return []
-        if not self.config.reddit_client_id or not self.config.reddit_client_secret:
-            logger.warning("Reddit API credentials not configured. Skipping Reddit.")
+        if not self.config.reddit_subreddits or not self.config.reddit_client_id or not self.config.reddit_client_secret:
+            logger.warning("Reddit subreddits or API credentials not configured. Skipping Reddit.")
             return []
 
-        logger.info("Fetching articles from Reddit r/artificialintelligence using Async PRAW...")
-
+        logger.info(f"Fetching articles from Reddit subreddits: {', '.join(self.config.reddit_subreddits)}")
+        
+        all_articles: List[Article] = []
+        
         try:
             reddit = asyncpraw.Reddit(
                 client_id=self.config.reddit_client_id,
@@ -103,23 +97,35 @@ class ArticleFetcher:
                 user_agent=self.config.reddit_user_agent,
             )
 
-            subreddit = await reddit.subreddit("MachineLearning")
-            articles: List[Article] = []
+            for subreddit_name in self.config.reddit_subreddits:
+                try:
+                    subreddit = await reddit.subreddit(subreddit_name)
+                    logger.info(f"Fetching from r/{subreddit_name}...")
+                    
+                    subreddit_articles: List[Article] = []
+                    async for submission in subreddit.new(limit=self.config.reddit_max_articles_per_subreddit + 10):
+                        # Filter out self-posts, stickied posts, and non-external links
+                        if not submission.is_self and not submission.stickied and "reddit.com" not in submission.url:
+                            # Filter out direct image or video links
+                            if not any(submission.url.endswith(ext) for ext in ['.png', '.jpg', '.jpeg', '.gif']) and \
+                               'youtube.com' not in submission.url and 'youtu.be' not in submission.url:
+                                
+                                title_lower = submission.title.lower()
+                                if not any(substring in title_lower for substring in ["ama", "ask me anything", "discussion", "weekly thread", "showoff", "meme"]):
+                                    subreddit_articles.append(Article(title=submission.title, url=submission.url, source=f"Reddit r/{subreddit_name}"))
+                                    if len(subreddit_articles) >= self.config.reddit_max_articles_per_subreddit:
+                                        break
+                    
+                    logger.info(f"Fetched {len(subreddit_articles)} articles from r/{subreddit_name}.")
+                    all_articles.extend(subreddit_articles)
 
-            async for submission in subreddit.new(limit=self.config.reddit_ai_max_articles + 50): # Fetch more to filter
-                # Filter out self-posts, stickied posts, and non-external links
-                if not submission.is_self and not submission.stickied and "reddit.com" not in submission.url:
-                    # Further filter by keywords in title or selftext (if it's a text post)
-                    title_lower = submission.title.lower()
-                    if any(keyword in title_lower for keyword in ["ai", "artificial intelligence", "machine learning", "llm", "deep learning", "neural network"]):
-                        # Filter out common irrelevant post types
-                        if not any(substring in title_lower for substring in ["ama", "ask me anything", "discussion", "weekly thread", "showoff", "meme"]):
-                            articles.append(Article(title=submission.title, url=submission.url, source="Reddit r/artificialintelligence"))
-                            if len(articles) >= self.config.reddit_ai_max_articles:
-                                break
-            logger.info(f"Fetched {len(articles)} articles from Reddit API.")
+                except Exception as e:
+                    logger.error(f"Error fetching from subreddit r/{subreddit_name}: {e}")
+                    continue
+
             await reddit.close()
-            return articles[:self.config.reddit_ai_max_articles]
+            logger.info(f"Fetched a total of {len(all_articles)} articles from Reddit.")
+            return all_articles
 
         except Exception as e:
             logger.error(f"Error fetching from Reddit using Async PRAW: {e}")
@@ -315,8 +321,8 @@ class ArticleFetcher:
 
         if self.config.enable_hackernews:
             add_articles_if_new(await self.fetch_hackernews_articles())
-        if self.config.enable_reddit_ai:
-            add_articles_if_new(self.fetch_reddit_articles_sync())
+        if self.config.reddit_subreddits:
+            add_articles_if_new(await self.fetch_reddit_ai_articles())
         if self.config.enable_techcrunch_ai:
             add_articles_if_new(await self.fetch_techcrunch_ai_articles())
         if self.config.enable_arxiv:
