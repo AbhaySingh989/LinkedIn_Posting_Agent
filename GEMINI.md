@@ -1,32 +1,17 @@
-
 # Project Overview
 
-This project is a Python-based autonomous LinkedIn agent that discovers trending AI articles, summarizes them using Google's Gemini LLM, and seeks user approval via Telegram before posting to LinkedIn.
+This project is an autonomous LinkedIn agent. Currently an MVP, the goal is to transform it into a production-ready application. The agent discovers trending AI articles, summarizes them using Google's Gemini LLM, and seeks user approval via Telegram before posting to LinkedIn.
 
-The agent's workflow is as follows:
-1.  **Fetch Articles**: Fetches articles from various sources like Reddit.
-2.  **Summarize**: Summarizes the articles using the Gemini LLM.
-3.  **Approval**: Sends the summarized article to a Telegram chat for approval.
-4.  **Post to LinkedIn**: If approved, the agent posts the article to LinkedIn.
+The development plan is outlined in `tasks.md` and focuses on moving the project from its current MVP state to a robust, reliable, and feature-rich application.
 
-## Key Technologies
+# Development Roadmap
 
-*   **Python**: The core language of the project.
-*   **Google Gemini**: Used for summarizing articles.
-*   **Telegram Bot**: Used for user interaction and approval.
-*   **Selenium**: Used for browser automation to post on LinkedIn.
+The development roadmap is divided into four main epics, as defined in `tasks.md`:
 
-## Architecture
-
-The project is structured into several modules:
-
-*   `main.py`: The main entry point of the application.
-*   `config.py`: Handles the configuration of the application.
-*   `src/article_fetcher.py`: Fetches articles from various sources.
-*   `src/llm_handler.py`: Handles the interaction with the Gemini LLM.
-*   `src/telegram_bot.py`: Manages the Telegram bot.
-*   `src/linkedin_poster.py`: Handles posting to LinkedIn.
-*   `src/utils.py`: Provides utility functions like logging.
+1.  **Epic 1: Core Stability and Reliability**: This is the highest priority and focuses on fixing critical bugs, upgrading dependencies, and making the existing features more robust.
+2.  **Epic 2: Agent Orchestration and Intelligence**: This epic focuses on re-architecting the agent using modern AI-native frameworks like CrewAI and Crawl4AI to make it more intelligent and maintainable.
+3.  **Epic 3: Feature Enhancements and Automation**: This epic focuses on adding new features like scheduling, content editing, and other improvements to make the agent more autonomous.
+4.  **Epic 4: Comprehensive Documentation**: This epic focuses on creating comprehensive documentation to make the project easy to understand, maintain, and extend.
 
 # Building and Running
 
@@ -66,7 +51,11 @@ python main.py
 
 # Development Conventions
 
-*   **Coding Style**: The project follows the PEP 8 style guide.
+The development process will follow the tasks outlined in `tasks.md` to ensure a stable and organized progression from MVP to production.
+
+*   **Priority**: All development should follow the priorities outlined in `tasks.md`, starting with **Epic 1: Core Stability and Reliability**.
+*   **Task-Driven Development**: Each development effort should correspond to a specific task in the `tasks.md` file.
+*   **Code Style**: The project follows the PEP 8 style guide.
 *   **Logging**: The project uses a custom JSON logger to log messages.
 *   **Configuration**: The project uses a `.env` file for configuration.
 *   **Modularity**: The project is divided into several modules, each with a specific responsibility.
