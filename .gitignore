@@ -90,3 +90,7 @@ venv.bak/
 
 # Custom
 .gemini/
+<<<<<<< HEAD
+=======
+src/
+>>>>>>> 2df0fa06e3539b97a57214d92474685fc894838d
