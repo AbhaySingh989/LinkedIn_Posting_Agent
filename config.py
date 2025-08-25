@@ -24,11 +24,16 @@ class Config:
         self.enable_hackernews = os.getenv("ENABLE_HACKERNEWS", "true").lower() == "true"
         self.hackernews_max_articles = int(os.getenv("HACKERNEWS_MAX_ARTICLES", "5"))
 
-        self.enable_reddit_ai = os.getenv("ENABLE_REDDIT_AI", "true").lower() == "true"
-        self.reddit_client_id = os.getenv("REDDIT_CLIENT_ID") # For Reddit API
+        self.reddit_client_id = os.getenv("REDDIT_CLIENT_ID")
         self.reddit_client_secret = os.getenv("REDDIT_CLIENT_SECRET")
-        self.reddit_user_agent = os.getenv("REDDIT_USER_AGENT", f"LinkedInAIAgent/0.1 by YourUsername (UniqueId:{os.urandom(4).hex()})")
-        self.reddit_ai_max_articles = int(os.getenv("REDDIT_AI_MAX_ARTICLES", "5"))
+        self.reddit_user_agent = os.getenv("REDDIT_USER_AGENT", f"LinkedInAIAgent/0.1 by YourUsername (UniqueId:{{os.urandom(4).hex()}})")
+        
+        # New Reddit configuration
+        self.reddit_subreddits = [
+            "generativeAI", "MachineLearning", "OpenAI", "singularity", "ChatGPT",
+            "LargeLanguageModels", "AIethics", "Futurology", "artificial", "LocalLLaMA"
+        ]
+        self.reddit_max_articles_per_subreddit = int(os.getenv("REDDIT_MAX_ARTICLES_PER_SUBREDDIT", "2"))
 
         self.enable_techcrunch_ai = os.getenv("ENABLE_TECHCRUNCH_AI", "true").lower() == "true"
         self.techcrunch_ai_url = os.getenv("TECHCRUNCH_AI_URL", "https://techcrunch.com/category/artificial-intelligence/")
@@ -82,9 +87,8 @@ class Config:
             logger.error("Please set them in your .env file or environment.")
             return False
 
-        if self.enable_reddit_ai and (not self.reddit_client_id or not self.reddit_client_secret):
-            logger.error("Reddit is enabled, but REDDIT_CLIENT_ID or REDDIT_CLIENT_SECRET is missing.")
-            return False
+        if self.reddit_subreddits and (not self.reddit_client_id or not self.reddit_client_secret):
+            logger.warning("Reddit subreddits are configured, but REDDIT_CLIENT_ID or REDDIT_CLIENT_SECRET is missing. Reddit will be skipped.")
 
         logger.info("Configuration loaded and validated successfully.")
         return True
@@ -113,11 +117,10 @@ LINKEDIN_PASSWORD="your_linkedin_password"
 ENABLE_HACKERNEWS="true"
 HACKERNEWS_MAX_ARTICLES="5"
 
-ENABLE_REDDIT_AI="true"
 REDDIT_CLIENT_ID="YOUR_REDDIT_APP_CLIENT_ID"         # Optional: For Reddit API access
 REDDIT_CLIENT_SECRET="YOUR_REDDIT_APP_CLIENT_SECRET" # Optional: For Reddit API access
 REDDIT_USER_AGENT="LinkedInAIAgent/0.1 by YourUsername" # Optional: Custom user agent for Reddit API
-REDDIT_AI_MAX_ARTICLES="5"
+REDDIT_MAX_ARTICLES_PER_SUBREDDIT="2"
 
 ENABLE_TECHCRUNCH_AI="true"
 TECHCRUNCH_AI_URL="https://techcrunch.com/category/artificial-intelligence/"
