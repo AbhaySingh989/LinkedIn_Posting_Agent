@@ -6,9 +6,9 @@ import logging
 import time
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
-from config import Config # Assuming config.py is in the parent directory or PYTHONPATH
+from config import Config
+from crawl4ai import AsyncWebCrawler
 import asyncio
-import nest_asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -331,114 +331,28 @@ class ArticleFetcher:
         logger.info(f"Total unique articles fetched: {len(all_articles)}")
         return all_articles
 
-    def get_article_content(self, url: str) -> Optional[str]:
+    async def get_article_content(self, url: str) -> Optional[str]:
         """
-        Fetches the main textual content of an article from its URL.
-        This is a basic implementation and might need a more sophisticated
-        library like 'newspaper3k' for better results across various sites.
-        Uses heuristics to find the main content body.
+        Fetches the main textual content of an article from its URL using Crawl4AI.
         """
         logger.info(f"Fetching content for article: {url}")
-        response = self._make_request(url)
-        if not response:
-            return None
-
-        # Check content type. If not HTML, return None.
-        content_type = response.headers.get('Content-Type', '')
-        if 'text/html' not in content_type:
-            logger.warning(f"Skipping non-HTML content for {url}. Content-Type: {content_type}")
-            return None
-
         try:
-            soup = BeautifulSoup(response.content, "html.parser")
-
-            # Remove script, style, nav, header, footer, aside elements as they usually don't contain main content
-            for unwanted_tag in soup(["script", "style", "nav", "header", "footer", "aside", "form", "button", "iframe"]):
-                unwanted_tag.decompose()
-
-            # Try to find common article body tags/classes
-            # This is highly heuristic and will not work for all sites.
-            # Order matters: more specific selectors first.
-            possible_body_selectors = [
-                "article[class*='body']", "div[class*='article-body']", "div[class*='story-content']", # Specific classes
-                "article", "main", "div[role='main']", # Semantic tags
-                "div[class*='post-content']", "div[class*='entry-content']", "div[class*='content']", # Common class names
-                "section[class*='article']"
-            ]
-
-            text_parts = []
-            content_found = False
-            selected_content_container = None
-
-            for selector in possible_body_selectors:
-                body_container = soup.select_one(selector)
-                if body_container:
-                    # Check if this container has significant text, not just links or tiny bits
-                    container_text_check = body_container.get_text(separator=" ", strip=True)
-                    if len(container_text_check) > 200: # Arbitrary threshold for significant text
-                        selected_content_container = body_container
-                        content_found = True
-                        logger.debug(f"Selected content container for {url} using selector: '{selector}'")
-                        break
-
-            if selected_content_container:
-                # Extract text primarily from <p> tags within the selected container
-                paragraphs = selected_content_container.find_all('p')
-                if paragraphs:
-                    for p in paragraphs:
-                        text = p.get_text(separator=" ", strip=True)
-                        # Filter out short paragraphs that might be captions, ads, or social media links
-                        if text and len(text.split()) > 7 and not any(kw in text.lower() for kw in ["follow us", "subscribe", "related:", "also read", "©", "rights reserved"]):
-                             text_parts.append(text)
-                else: # If no <p> tags, try to get all text from the container, but be wary of noise
-                    logger.debug(f"No <p> tags in selected container for {url}, using broader text extraction.")
-                    all_text_in_container = selected_content_container.get_text(separator="\n", strip=True)
-                    # Split by lines and filter
-                    for line in all_text_in_container.splitlines():
-                        stripped_line = line.strip()
-                        if stripped_line and len(stripped_line.split()) > 7 and not any(kw in stripped_line.lower() for kw in ["follow us", "subscribe", "related:", "also read", "©", "rights reserved"]):
-                            text_parts.append(stripped_line)
-
-            if not content_found or not text_parts:
-                logger.warning(f"Could not find specific article body for {url} with selectors. Falling back to generic text extraction from body.")
-                body = soup.find("body")
-                if body:
-                    # Get text from all <p> tags in the body as a last resort
-                    all_paragraphs = body.find_all("p")
-                    if all_paragraphs:
-                        for p in all_paragraphs:
-                            text = p.get_text(separator=" ", strip=True)
-                            if text and len(text.split()) > 10 and not any(kw in text.lower() for kw in ["follow us", "subscribe", "related:", "also read", "©", "rights reserved"]):
-                                text_parts.append(text)
-                    else: # If still no p tags, just grab all text from body, this will be noisy
-                         logger.debug(f"No <p> tags found in body for {url} during fallback. Grabbing all body text.")
-                         body_text = body.get_text(separator="\n", strip=True)
-                         for line in body_text.splitlines():
-                            stripped_line = line.strip()
-                            if stripped_line and len(stripped_line.split()) > 10 and not any(kw in stripped_line.lower() for kw in ["follow us", "subscribe", "related:", "also read", "©", "rights reserved"]):
-                                text_parts.append(stripped_line)
-
-
-            if not text_parts:
-                logger.warning(f"No significant text content found for {url} after trying all methods.")
-                return None
-
-            full_text = "\n\n".join(text_parts) # Join paragraphs with double newlines for readability
-            # Basic cleaning: reduce multiple newlines/spaces that might have been introduced
-            full_text = "\n".join([line.strip() for line in full_text.splitlines() if line.strip()])
-            full_text = full_text.replace('  ', ' ') # Replace double spaces with single
-
-            # Limit content length to avoid oversized LLM prompts (e.g. first 1500 words)
-            # This should be based on tokens for LLMs, but word count is a simpler proxy.
-            max_words_for_summary = 1500
-            words = full_text.split()
-            if len(words) > max_words_for_summary:
-                full_text = " ".join(words[:max_words_for_summary]) + "..."
-                logger.info(f"Truncated article content for {url} to approximately {max_words_for_summary} words for LLM processing.")
-
-            return full_text
+            async with AsyncWebCrawler() as crawler:
+                result = await crawler.arun(url=url)
+                if result and result.markdown:
+                    # Limit content length to avoid oversized LLM prompts
+                    max_words_for_summary = 1500
+                    words = result.markdown.split()
+                    if len(words) > max_words_for_summary:
+                        full_text = " ".join(words[:max_words_for_summary]) + "..."
+                        logger.info(f"Truncated article content for {url} to approximately {max_words_for_summary} words for LLM processing.")
+                        return full_text
+                    return result.markdown
+                else:
+                    logger.warning(f"Crawl4AI returned no content for {url}.")
+                    return None
         except Exception as e:
-            logger.error(f"Error extracting content from {url}: {e}", exc_info=True)
+            logger.error(f"Error extracting content from {url} with Crawl4AI: {e}", exc_info=True)
             return None
 
 

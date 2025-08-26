@@ -11,20 +11,22 @@
 
 ## 📖 About
 
-This project is a fully automated Python-based LinkedIn agent that discovers trending AI articles, summarizes them using Google's Gemini LLM, and seeks user approval via Telegram before posting to LinkedIn.
+This project is a fully automated Python-based LinkedIn agent that discovers trending AI articles, summarizes them using Google's Gemini LLM, and seeks user approval via Telegram before posting to LinkedIn. The agent is built using the CrewAI framework for orchestration and Crawl4AI for advanced web scraping.
 
 ## ✨ Features
 
 ### 🚀 Core Functionality
 
-*   **📄 Trend Sourcing**: Monitors Hacker News, Reddit, TechCrunch AI, and ArXiv for new AI articles.
+*   **📄 Trend Sourcing**: Monitors Hacker News, Reddit, TechCrunch AI, and ArXiv for new AI articles using Crawl4AI.
 *   **🤖 AI Summarization**: Uses Google Gemini to generate concise summaries of articles.
-*   ** approval Workflow**: Sends article title, source, summary, and link to a specified Telegram chat, with "Post to LinkedIn" and "Ignore" inline buttons.
+*   **✅ Approval Workflow**: Sends article title, source, summary, and link to a specified Telegram chat, with "Post to LinkedIn", "Edit Summary", and "Ignore" inline buttons.
 *   **🌐 Automated LinkedIn Posting**: Posts the article link and its AI-generated summary to LinkedIn using Selenium browser automation if approved.
+*   **💾 Persistent Storage**: Remembers which articles have already been processed to avoid duplicate posts.
+*   **⏰ Scheduling**: Runs automatically on a schedule defined in the `.env` file.
 
 ### 🎨 User Experience
 
-*   **💬 Telegram Integration**: Native Telegram bot interface with inline keyboards for easy approval.
+*   **💬 Telegram Integration**: Native Telegram bot interface with inline keyboards for easy approval and editing.
 *   **🔘 Interactive Buttons**: Easy-to-use buttons for all functions (no typing commands!).
 *   **🎯 Progress Tracking**: Real-time progress updates in the console logs.
 
@@ -128,14 +130,15 @@ REDDIT_USER_AGENT="YourApp/0.1 by YourUsername"
 python main.py
 ```
 
-You should see log output in your console indicating the agent has started.
+The agent will run once by default. To run it on a schedule, set the `SCHEDULE` variable in your `.env` file. For example, to run every hour, set `SCHEDULE=hourly`.
 
 ### 📱 Using the Bot
 
 1.  **Start the Bot**: The agent will automatically start fetching articles.
 2.  **Receive Approval Requests**: The bot will send messages to your configured Telegram chat with article details and approval buttons.
-3.  **Approve or Ignore**:
+3.  **Approve, Edit, or Ignore**:
     *   Click **✅ Post to LinkedIn** to approve.
+    *   Click **📝 Edit Summary** to provide a new summary.
     *   Click **❌ Ignore** to skip the article.
 
 ***
@@ -145,10 +148,11 @@ You should see log output in your console indicating the agent has started.
 The agent follows this workflow:
 
 *   🚀 **Starting Processing** - Initialization and configuration loading.
-*   📥 **Fetching Articles** - Scouting Hacker News, Reddit, and other sources.
-*   🤖 **AI Analysis** - Generating an intelligent summary with Google Gemini.
-*   💬 **Requesting Approval** - Sending the summary and article to you on Telegram.
-*   ✅ **Posting to LinkedIn** - If approved, the agent logs in and posts to LinkedIn.
+*   🤖 **CrewAI Orchestration** - The CrewAI framework orchestrates the agents and tasks.
+*   📥 **Fetching Articles** - The `ArticleFetcherAgent` fetches articles using Crawl4AI.
+*   🤖 **AI Analysis** - The `SummarizerAgent` generates an intelligent summary with Google Gemini.
+*   💬 **Requesting Approval** - The `TelegramBot` sends the summary and article to you on Telegram.
+*   ✅ **Posting to LinkedIn** - If approved, the `LinkedInPosterAgent` posts to LinkedIn.
 *   📝 **Done** - The agent finishes its run.
 
 ***
@@ -159,11 +163,13 @@ The agent follows this workflow:
 .
 ├── README.md
 ├── requirements.txt
-├── main.py             # Main orchestrator script
+├── main.py             # Main entry point for the application
 ├── config.py           # Configuration loading and validation
 ├── .env.example        # Example environment variables file
 ├── src/
 │   ├── __init__.py
+│   ├── crew.py             # CrewAI agents, tasks, and crew definition
+│   ├── database.py         # SQLite database handler
 │   ├── article_fetcher.py  # Fetches articles from various sources
 │   ├── llm_handler.py      # Handles interaction with Gemini LLM
 │   ├── telegram_bot.py   # Manages Telegram bot communication
@@ -212,6 +218,7 @@ We welcome contributions! Here's how you can help:
 ## 🙏 Acknowledgments
 
 *   🤖 **Google AI** for the powerful Gemini model.
+*   **CrewAI** and **Crawl4AI** for their amazing frameworks.
 *   🔗 **The developers of `python-telegram-bot` and `Selenium`**.
 *   🌟 **The Open Source Community** for continuous inspiration and support.
 

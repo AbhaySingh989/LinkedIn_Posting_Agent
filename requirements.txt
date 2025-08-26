@@ -1,19 +1,22 @@
 # Core Libraries
-python-dotenv
-requests
-beautifulsoup4
-selenium
+typing-extensions==4.14.0
+python-dotenv==1.1.1
+requests==2.32.5
+beautifulsoup4==4.13.5
+selenium==4.35.0
 # Telegram Bot
-python-telegram-bot
+python-telegram-bot==22.3
 # Google Gemini API
-google-generativeai
+google-genai==1.31.0
 # Optional for scheduling
-schedule
+schedule==1.2.0
 # Optional for data handling
-pandas # For Google Sheets or other structured data logging
+pandas==2.3.2
 # Webdriver manager for Selenium
-webdriver-manager
+webdriver-manager==4.0.2
 # Reddit API
-praw
-asyncpraw
-nest-asyncio
+praw==7.7.1
+asyncpraw==7.2.0
+# Web Scraping
+crawl4ai==0.7.0
+crewai==0.165.1

@@ -66,6 +66,9 @@ class Config:
         self.log_file_path = os.getenv("LOG_FILE_PATH") # Optional: For standard text log file
         self.log_json_file_path = os.getenv("LOG_JSON_FILE_PATH") # Optional: For JSON formatted log file
 
+        # Scheduling
+        self.schedule = os.getenv("SCHEDULE", "")
+
 
     def validate(self) -> bool:
         """

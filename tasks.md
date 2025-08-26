@@ -165,57 +165,57 @@ As a developer, I want comprehensive and up-to-date project documentation, so th
 
 ### Epic 1: Core Stability and Reliability
 **Priority: High**
-- [ ] **1. Upgrade Dependencies**
-  - [ ] **Web Search:** Identify the latest stable versions of all libraries in `requirements.txt`.
-  - [ ] Update `requirements.txt` with the new versions.
-  - [ ] **Web Search:** Research breaking changes for the new library versions.
-  - [ ] Refactor the code to be compatible with the new versions, especially replacing `google-generativeai` with `google-genai`.
+- [x] **1. Upgrade Dependencies**
+  - [x] **Web Search:** Identify the latest stable versions of all libraries in `requirements.txt`.
+  - [x] Update `requirements.txt` with the new versions.
+  - [x] **Web Search:** Research breaking changes for the new library versions.
+  - [x] Refactor the code to be compatible with the new versions, especially replacing `google-generativeai` with `google-genai`.
   - _User_Story: 1.3_
-- [ ] **2. Implement Persistent Storage**
-  - [ ] Add `db-sqlite3` to the project for database interaction.
-  - [ ] Create a `database.py` module to handle database initialization and connection.
-  - [ ] Implement a function to store a processed article URL and a function to check if a URL exists.
-  - [ ] Integrate the database check into the main processing loop in `main.py`.
+- [x] **2. Implement Persistent Storage**
+  - [x] Add `db-sqlite3` to the project for database interaction.
+  - [x] Create a `database.py` module to handle database initialization and connection.
+  - [x] Implement a function to store a processed article URL and a function to check if a URL exists.
+  - [x] Integrate the database check into the main processing loop in `main.py`.
   - _User_Story: 1.1_
-- [ ] **3. Fix Asynchronous Execution**
-  - [ ] **Web Search:** Research best practices for `asyncio` with the `python-telegram-bot` library.
-  - [ ] Re-architect the application to run within a single, top-level `asyncio` event loop, starting in `main.py`.
-  - [ ] Remove the `nest_asyncio` library and all synchronous wrappers (e.g., `run_until_complete`).
+- [x] **3. Fix Asynchronous Execution**
+  - [x] **Web Search:** Research best practices for `asyncio` with the `python-telegram-bot` library.
+  - [x] Re-architect the application to run within a single, top-level `asyncio` event loop, starting in `main.py`.
+  - [x] Remove the `nest_asyncio` library and all synchronous wrappers (e.g., `run_until_complete`).
   - _User_Story: 1.2_
-- [ ] **4. Improve Scraper and Poster Reliability**
-  - [ ] **Web Search:** Inspect the current HTML structure of Hacker News and TechCrunch to find new, stable selectors.
-  - [ ] Update the selectors in `article_fetcher.py`.
-  - [ ] **Web Search:** Research best practices for robust Selenium automation on dynamic websites like LinkedIn.
-  - [ ] Re-implement the `linkedin_poster.py` script with robust selectors (ARIA roles, data-attributes), explicit waits, and intelligent retry logic.
-  - [ ] Add enhanced error handling (screenshots, Telegram notifications) to the LinkedIn poster.
+- [x] **4. Improve Scraper and Poster Reliability**
+  - [x] **Web Search:** Inspect the current HTML structure of Hacker News and TechCrunch to find new, stable selectors.
+  - [x] Update the selectors in `article_fetcher.py`.
+  - [x] **Web Search:** Research best practices for robust Selenium automation on dynamic websites like LinkedIn.
+  - [x] Re-implement the `linkedin_poster.py` script with robust selectors (ARIA roles, data-attributes), explicit waits, and intelligent retry logic.
+  - [x] Add enhanced error handling (screenshots, Telegram notifications) to the LinkedIn poster.
   - _User_Story: 1.4, 1.5_
 
 ### Epic 2: Agent Orchestration and Intelligence
 **Priority: Medium**
-- [ ] **5. Implement Advanced Web Scraping**
-  - [ ] **Web Search:** Review the documentation for `Crawl4AI` to understand its API and features.
-  - [ ] Replace the `get_article_content` function in `article_fetcher.py` with an implementation that uses `Crawl4AI`.
+- [x] **5. Implement Advanced Web Scraping**
+  - [x] **Web Search:** Review the documentation for `Crawl4AI` to understand its API and features.
+  - [x] Replace the `get_article_content` function in `article_fetcher.py` with an implementation that uses `Crawl4AI`.
   - _User_Story: 2.2_
-- [ ] **6. Migrate to CrewAI**
-  - [ ] **Web Search:** Complete tutorials and review documentation for `CrewAI`.
-  - [ ] Design the agent's new architecture using CrewAI, defining roles and tasks for a Fetcher, Summarizer, and Poster.
-  - [ ] Re-implement the application logic, replacing the `main.py` script with a new `crew.py` for orchestration.
+- [x] **6. Migrate to CrewAI**
+  - [x] **Web Search:** Complete tutorials and review documentation for `CrewAI`.
+  - [x] Design the agent's new architecture using CrewAI, defining roles and tasks for a Fetcher, Summarizer, and Poster.
+  - [x] Re-implement the application logic, replacing the `main.py` script with a new `crew.py` for orchestration.
   - _User_Story: 2.1_
 
 ### Epic 3: Feature Enhancements and Automation
 **Priority: Low**
-- [ ] **7. Add Scheduling and Editing Features**
-  - [ ] Integrate the `schedule` library into the main script to run the agent automatically based on a `.env` variable.
+- [x] **7. Add Scheduling and Editing Features**
+  - [x] Integrate the `schedule` library into the main script to run the agent automatically based on a `.env` variable.
   - _User_Story: 3.1_
-  - [ ] Modify the `telegram_bot.py` to add an "Edit" button to the approval message.
-  - [ ] Implement the conversation flow to receive and use the user's edited summary.
+  - [x] Modify the `telegram_bot.py` to add an "Edit" button to the approval message.
+  - [x] Implement the conversation flow to receive and use the user's edited summary.
   - _User_Story: 3.2_
 
 ### Epic 4: Comprehensive Documentation
 **Priority: Low**
-- [ ] **8. Create Project Documentation**
-  - [ ] Create the `Product_Architecture.md` file.
-  - [ ] Write a detailed description of the agent's architecture and components.
-  - [ ] Design and embed a Mermaid process flow diagram in `Product_Architecture.md`.
-  - [ ] Update the main `README.md` to reflect all the new features and architectural changes.
+- [x] **8. Create Project Documentation**
+  - [x] Create the `Product_Architecture.md` file.
+  - [x] Write a detailed description of the agent's architecture and components.
+  - [x] Design and embed a Mermaid process flow diagram in `Product_Architecture.md`.
+  - [x] Update the main `README.md` to reflect all the new features and architectural changes.
   - _User_Story: 4.1_
