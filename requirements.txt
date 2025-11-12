@@ -3,20 +3,20 @@ typing-extensions==4.14.0
 python-dotenv==1.1.1
 requests==2.32.5
 beautifulsoup4==4.13.5
-selenium==4.35.0
+selenium==4.22.0
 # Telegram Bot
 python-telegram-bot==22.3
 # Google Gemini API
 google-genai==1.31.0
+langchain-google-genai==0.0.10
 # Optional for scheduling
 schedule==1.2.0
 # Optional for data handling
 pandas==2.3.2
-# Webdriver manager for Selenium
-webdriver-manager==4.0.2
 # Reddit API
 praw==7.7.1
-asyncpraw==7.2.0
+asyncpraw==7.8.1
 # Web Scraping
-crawl4ai==0.7.0
-crewai==0.165.1
+aiohttp
+trafilatura
+crewai==0.28.8

@@ -1,6 +1,5 @@
 from crewai import Agent, Task, Crew, Process
-from crewai.tools import BaseTool
-from src.llm_handler import LlmHandler
+from langchain_google_genai import ChatGoogleGenerativeAI
 from config import load_config
 
 # Load configuration to get API key
@@ -8,25 +7,16 @@ config = load_config()
 if not config or not config.gemini_api_key:
     raise ValueError("GEMINI_API_KEY not found in configuration.")
 
-# Initialize the LLM handler
-llm_handler = LlmHandler(config.gemini_api_key)
-
-class SummarizationTool(BaseTool):
-    name: str = "Article Summarization Tool"
-    description: str = "Summarizes the provided text content into a concise and engaging LinkedIn post. Input should be the full text content of the article."
-
-    def _run(self, article_content: str) -> str:
-        """Uses the LlmHandler to summarize the article content."""
-        # This is a synchronous wrapper. The actual llm_handler method is async.
-        # CrewAI v0.28.8 has some issues with async tools, so we run it like this.
-        # In a more advanced setup, we might use asyncio.run() here,
-        # but for now, we need to adjust LlmHandler to have a sync method.
-        return llm_handler.summarize_content_sync(article_content)
+# Initialize the LLM
+llm = ChatGoogleGenerativeAI(
+    model="gemini-pro",
+    verbose=True,
+    temperature=0.5,
+    google_api_key=config.gemini_api_key,
+)
 
 def create_summary_crew():
     """Creates and configures the summarization crew."""
-
-    summarization_tool = SummarizationTool()
 
     # Define the Summarizer Agent
     summarizer_agent = Agent(
@@ -38,7 +28,7 @@ def create_summary_crew():
         ),
         verbose=True,
         allow_delegation=False,
-        tools=[summarization_tool]
+        llm=llm,
     )
 
     # Define the Summarization Task
@@ -64,7 +54,7 @@ def create_summary_crew():
         agents=[summarizer_agent],
         tasks=[summarize_task],
         process=Process.sequential,
-        verbose=2
+        verbose=True,
     )
 
     return summary_crew

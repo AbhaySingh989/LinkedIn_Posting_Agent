@@ -7,7 +7,8 @@ import time
 from typing import List, Optional, Dict, Any
 from dataclasses import dataclass, field
 from config import Config
-from crawl4ai import AsyncWebCrawler
+import aiohttp
+import trafilatura
 import asyncio
 
 logger = logging.getLogger(__name__)
@@ -198,58 +199,27 @@ class ArticleFetcher:
 
             # Primary strategy: Look for common article container classes and then find title links within them.
             # Selectors are ordered by assumed likelihood or specificity.
-            potential_article_selectors = [
-                "a.post-card__title-link", # Common for newer TechCrunch layouts
-                "h2.post-block__title a", # Older TechCrunch layout
-                "div.river-block h2 a", # Another common pattern on news sites
-                "li.river-item h2 a", # If articles are in a list
-                "article header h2 a", # General article structure
-                "div[class*='content-list'] div[class*='item'] a[href*='/20']" # Generic list item with a link that looks like an article
-            ]
-
             found_urls = set()
+            selector = "div.fi-main article header h2 a"
+            elements = soup.select(selector)
+            for link_tag in elements:
+                title = link_tag.text.strip()
+                url = link_tag.get('href')
 
-            for selector in potential_article_selectors:
-                if len(articles) >= self.config.techcrunch_max_articles:
-                    break
+                if not url: continue
+                if not url.startswith("http"): # Ensure absolute URL
+                    if url.startswith("/"):
+                        url = f"https://techcrunch.com{url}"
+                    else:
+                        logger.warning(f"Skipping potentially malformed TechCrunch URL: {url}")
+                        continue
 
-                elements = soup.select(selector)
-                for link_tag in elements:
-                    title = link_tag.text.strip()
-                    url = link_tag.get('href')
-
-                    if not url: continue
-                    if not url.startswith("http"): # Ensure absolute URL
-                        if url.startswith("/"): 
-                            url = f"https://techcrunch.com{url}"
-                        else:
-                            logger.warning(f"Skipping potentially malformed TechCrunch URL: {url}")
-                            continue
-
-                    if title and url and url not in found_urls:
-                        # Basic check to ensure it's likely an article and not a category link etc.
-                        # TechCrunch URLs often contain year/month/day.
-                        if "/20" in url and len(title) > 15: # Heuristic: year in URL, title has some length
-                            articles.append(Article(title=title, url=url, source="TechCrunch AI"))
-                            found_urls.add(url)
-                            if len(articles) >= self.config.techcrunch_max_articles:
-                                break
-
-            if not articles: # A fallback if the above doesn't work well
-                logger.warning("Primary TechCrunch scraping selectors found no articles, trying broader fallback.")
-                # Fallback: Look for any link within an <article> tag that seems plausible.
-                # This is very broad and might pick up non-article links.
-                article_tags = soup.find_all('article')
-                for article_tag in article_tags:
-                    link_tag = article_tag.find("a", href=True)
-                    if link_tag and link_tag['href'].startswith("http"):
-                        title = link_tag.text.strip()
-                        url = link_tag['href']
-                        if title and url and url not in found_urls and "/20" in url and len(title) > 15:
-                            articles.append(Article(title=title, url=url, source="TechCrunch AI (Fallback)"))
-                            found_urls.add(url)
-                            if len(articles) >= self.config.techcrunch_max_articles:
-                                break
+                if title and url and url not in found_urls:
+                    if "/20" in url and len(title) > 15:
+                        articles.append(Article(title=title, url=url, source="TechCrunch AI"))
+                        found_urls.add(url)
+                        if len(articles) >= self.config.techcrunch_max_articles:
+                            break
 
             logger.info(f"Fetched {len(articles)} articles from TechCrunch AI.")
         except Exception as e:
@@ -331,28 +301,36 @@ class ArticleFetcher:
         logger.info(f"Total unique articles fetched: {len(all_articles)}")
         return all_articles
 
-    async def get_article_content(self, url: str) -> Optional[str]:
+    async def fetch_article_content(self, url: str) -> Optional[str]:
         """
-        Fetches the main textual content of an article from its URL using Crawl4AI.
+        Fetches the main textual content of an article from its URL using aiohttp and trafilatura.
         """
         logger.info(f"Fetching content for article: {url}")
         try:
-            async with AsyncWebCrawler() as crawler:
-                result = await crawler.arun(url=url)
-                if result and result.markdown:
-                    # Limit content length to avoid oversized LLM prompts
-                    max_words_for_summary = 1500
-                    words = result.markdown.split()
-                    if len(words) > max_words_for_summary:
-                        full_text = " ".join(words[:max_words_for_summary]) + "..."
-                        logger.info(f"Truncated article content for {url} to approximately {max_words_for_summary} words for LLM processing.")
-                        return full_text
-                    return result.markdown
-                else:
-                    logger.warning(f"Crawl4AI returned no content for {url}.")
-                    return None
+            async with aiohttp.ClientSession() as session:
+                async with session.get(url, timeout=self.config.request_timeout) as response:
+                    response.raise_for_status()
+                    html_content = await response.text()
+            
+            extracted_text = trafilatura.extract(html_content, include_comments=False, include_tables=False)
+
+            if extracted_text:
+                # Limit content length to avoid oversized LLM prompts
+                max_words_for_summary = 1500
+                words = extracted_text.split()
+                if len(words) > max_words_for_summary:
+                    full_text = " ".join(words[:max_words_for_summary]) + "..."
+                    logger.info(f"Truncated article content for {url} to approximately {max_words_for_summary} words for LLM processing.")
+                    return full_text
+                return extracted_text
+            else:
+                logger.warning(f"Trafilatura returned no content for {url}.")
+                return None
+        except aiohttp.ClientError as e:
+            logger.error(f"Error fetching {url} with aiohttp: {e}", exc_info=True)
+            return None
         except Exception as e:
-            logger.error(f"Error extracting content from {url} with Crawl4AI: {e}", exc_info=True)
+            logger.error(f"An unexpected error occurred for {url} during content extraction: {e}", exc_info=True)
             return None
 
 
@@ -421,7 +399,7 @@ if __name__ == "__main__":
             print(f"  {i+1}. Title: {article.title}\n     URL: {article.url}\n     Source: {article.source}")
             if i < 2 : # Test content fetching for first 2 articles (or fewer if less than 2 fetched)
                 print(f"     Fetching content for: {article.url}")
-                content = fetcher.get_article_content(article.url)
+                content = fetcher.fetch_article_content(article.url)
                 if content:
                     print(f"     Content snippet (first 300 chars): {content[:300]}...")
                     print(f"     Content total length: {len(content)} chars")

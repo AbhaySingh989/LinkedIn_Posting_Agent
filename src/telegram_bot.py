@@ -34,7 +34,6 @@ class TelegramNotifier:
                 EDITING_SUMMARY: [MessageHandler(filters.TEXT & ~filters.COMMAND, self.receive_new_summary)],
             },
             fallbacks=[CommandHandler("cancel", self.cancel_edit)],
-            per_message=True,
         )
 
         self.application.add_handler(CommandHandler("start", self.start_command))
@@ -56,11 +55,12 @@ class TelegramNotifier:
             [InlineKeyboardButton("❌ Ignore", callback_data=f"ignore_{article.url}")],
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        message_text = (
-            f"*Title:* {article.title}\n\n"
-            f"*Summary:*\n{article.summary}\n\n"
-            f"[Read More]({article.url})"
-        )
+        message_text = f"""*Title:* {article.title}
+
+*Summary:*
+{article.summary}
+
+[Read More]({article.url})"""
         # Store the article object in context, keyed by URL, for later retrieval
         context_key = f"article_{article.url}"
         self.application.bot_data[context_key] = article
@@ -85,7 +85,6 @@ class TelegramNotifier:
                 logger.warning(f"Attempted to post article {article.url}, but LinkedIn poster is not available or not logged in.")
                 await query.edit_message_text(text=f"⚠️ Could not post article: LinkedIn integration is disabled due to an error. The article has been marked as 'ignored'.")
                 self.db.add_processed_article(url, 'ignored_poster_unavailable')
-                del self.application.bot_data[context_key]
                 return
 
             logger.info(f"Posting article: {article.url}")

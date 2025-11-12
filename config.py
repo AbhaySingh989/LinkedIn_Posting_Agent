@@ -45,7 +45,7 @@ class Config:
         self.arxiv_max_articles = int(os.getenv("ARXIV_MAX_ARTICLES", "3"))
 
         # LLM Settings
-        self.llm_model_name = os.getenv("LLM_MODEL_NAME", "gemini-pro") # Or other compatible Gemini model
+        self.llm_model_name = os.getenv("LLM_MODEL_NAME", "gemini-2.0-flash") # Or other compatible Gemini model
         self.summarization_prompt = os.getenv(
             "SUMMARIZATION_PROMPT",
             "Please provide a concise and engaging summary of the following article, suitable for a LinkedIn post. "
@@ -134,7 +134,7 @@ ARXIV_SEARCH_QUERY="cat:cs.AI OR cat:cs.LG OR cat:stat.ML"
 ARXIV_MAX_ARTICLES="3"
 
 # LLM Settings
-LLM_MODEL_NAME="gemini-pro"
+LLM_MODEL_NAME="gemini-2.0-flash"
 # SUMMARIZATION_PROMPT="Provide a brief summary for this article for LinkedIn: "
 
 # LinkedIn Posting Settings
